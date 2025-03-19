@@ -1,17 +1,11 @@
 /**
  * Instagram Follow Checker Script
  * 
- * Run with --log flag to enable detailed logging:
- * instagramFollowChecker('--log');
- * 
- * Run without arguments for normal mode:
+ * Run with normal mode:
  * instagramFollowChecker();
  * 
- * To download results:
- * downloadResults();
- * 
- * To download logs (if logging was enabled):
- * downloadLogs();
+ * Run with logging enabled:
+ * instagramFollowChecker('--log');
  */
 
 function instagramFollowChecker(flag) {
@@ -37,25 +31,6 @@ function instagramFollowChecker(flag) {
             }
         };
         
-        // Function to download logs
-        const downloadLogs = () => {
-            if (logs.length === 0) {
-                console.log('No logs available. Run the script with --log flag to enable logging.');
-                return;
-            }
-            
-            const blob = new Blob([logs.join('\n')], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `instagram-script-logs-${new Date().toISOString().split('T')[0]}.txt`;
-            a.click();
-            URL.revokeObjectURL(url);
-        };
-        
-        // Add download logs function to window
-        window.downloadLogs = downloadLogs;
-        
         // Helper functions
         const delay = async (ms) => {
             log(`Waiting for ${ms}ms...`);
@@ -80,6 +55,11 @@ function instagramFollowChecker(flag) {
         // Helper function to get username from profile URL
         const getUsernameFromUrl = (url) => {
             try {
+                // Try regex first for better performance
+                const match = url.match(/instagram\.com\/([^/?]+)/);
+                if (match && match[1]) return match[1];
+                
+                // Fall back to original method if regex fails
                 const parts = url.split('/');
                 return parts[parts.length - 2] === '' ? parts[parts.length - 3] : parts[parts.length - 2];
             } catch (e) {
@@ -101,7 +81,7 @@ function instagramFollowChecker(flag) {
             
             log('Did not find container with class _aano, searching for alternatives...');
             
-            // Log all elements in the dialog for debugging
+            // Look for the dialog
             const dialog = document.querySelector('div[role="dialog"]');
             if (!dialog) {
                 log('No dialog found!', 'error');
@@ -110,7 +90,7 @@ function instagramFollowChecker(flag) {
             
             log(`Dialog found: ${dialog.className}`);
             
-            // Log all divs in the dialog with their properties
+            // Find potential scrollable divs
             const divs = dialog.querySelectorAll('div');
             log(`Found ${divs.length} divs in dialog`);
             
@@ -123,7 +103,7 @@ function instagramFollowChecker(flag) {
                 const height = div.clientHeight;
                 
                 if (hasScroll && div.scrollHeight > div.clientHeight) {
-                    log(`Potential scrollable div #${index}: class=${div.className}, height=${height}, scrollHeight=${div.scrollHeight}`);
+                    log(`Potential scrollable div: height=${height}, scrollHeight=${div.scrollHeight}`);
                     
                     if (height > maxHeight) {
                         maxHeight = height;
@@ -133,7 +113,7 @@ function instagramFollowChecker(flag) {
             });
             
             if (scrollableCandidate) {
-                log(`Selected scrollable container: class=${scrollableCandidate.className}, height=${scrollableCandidate.clientHeight}`);
+                log(`Selected scrollable container: height=${scrollableCandidate.clientHeight}`);
                 return scrollableCandidate;
             }
             
@@ -141,7 +121,7 @@ function instagramFollowChecker(flag) {
             let largestDiv = null;
             maxHeight = 0;
             
-            divs.forEach((div, index) => {
+            divs.forEach((div) => {
                 const height = div.clientHeight;
                 if (height > maxHeight) {
                     maxHeight = height;
@@ -150,7 +130,7 @@ function instagramFollowChecker(flag) {
             });
             
             if (largestDiv) {
-                log(`No scrollable container found. Using largest div as fallback: class=${largestDiv.className}, height=${largestDiv.clientHeight}`, 'warn');
+                log(`No scrollable container found. Using largest div as fallback: height=${largestDiv.clientHeight}`, 'warn');
                 return largestDiv;
             }
             
@@ -159,7 +139,7 @@ function instagramFollowChecker(flag) {
         };
         
         // Improved scrolling function with detailed logging
-        const scrollDialog = async (maxScrollAttempts = 300) => {
+        const scrollDialog = async (maxScrollAttempts = 200) => {
             log('Starting scrollDialog function...');
             
             const scrollableSection = findScrollableContainer();
@@ -168,7 +148,7 @@ function instagramFollowChecker(flag) {
                 return false;
             }
             
-            log(`Found scrollable section: class=${scrollableSection.className}, height=${scrollableSection.clientHeight}, scrollHeight=${scrollableSection.scrollHeight}`);
+            log(`Found scrollable section: height=${scrollableSection.clientHeight}, scrollHeight=${scrollableSection.scrollHeight}`);
             
             let lastHeight = scrollableSection.scrollHeight;
             let scrollCount = 0;
@@ -185,7 +165,8 @@ function instagramFollowChecker(flag) {
                 scrollableSection.scrollTop = scrollableSection.scrollHeight;
                 log(`Scrolled to position: ${scrollableSection.scrollTop}`);
                 
-                await delay(800 + Math.random() * 400);
+                // Use slightly reduced delay (700ms instead of 800ms)
+                await delay(700 + Math.random() * 300);
                 
                 // Check if we've reached the bottom
                 const newHeight = scrollableSection.scrollHeight;
@@ -193,9 +174,9 @@ function instagramFollowChecker(flag) {
                 
                 if (newHeight === lastHeight) {
                     noChangeCount++;
-                    log(`No change in height detected (${noChangeCount}/5)`);
-                    if (noChangeCount >= 5) {
-                        log('Finished scrolling, no changes detected after 5 attempts');
+                    log(`No change in height detected (${noChangeCount}/4)`);
+                    if (noChangeCount >= 4) {
+                        log('Finished scrolling, no changes detected after 4 attempts');
                         break;
                     }
                 } else {
@@ -208,8 +189,8 @@ function instagramFollowChecker(flag) {
                     log('Reached maximum scroll attempts', 'warn');
                 }
                 
-                // Add progress indicator every 20 scrolls if logging is disabled
-                if (!enableLogging && scrollCount % 20 === 0) {
+                // Add progress indicator every 15 scrolls if logging is disabled
+                if (!enableLogging && scrollCount % 15 === 0) {
                     console.log(`Scrolling... (${scrollCount}/${maxScrollAttempts})`);
                 }
             }
@@ -234,9 +215,10 @@ function instagramFollowChecker(flag) {
             const userLinks = dialog.querySelectorAll('a[role="link"]');
             log(`Found ${userLinks.length} user links in dialog`);
             
-            const usernames = [];
+            // Use Set for faster deduplication
+            const usernameSet = new Set();
             
-            userLinks.forEach((link, index) => {
+            userLinks.forEach((link) => {
                 if (link.href && link.href.includes('/') && 
                     !link.href.includes('/p/') && 
                     !link.href.includes('/reels/') && 
@@ -244,15 +226,15 @@ function instagramFollowChecker(flag) {
                     !link.href.includes('/explore/')) {
                     
                     const username = getUsernameFromUrl(link.href);
-                    log(`Processing link #${index}: href=${link.href}, extracted username=${username}`);
+                    log(`Processing link: href=${link.href}, extracted username=${username}`);
                     
-                    if (username && !usernames.includes(username) && username !== 'accounts') {
-                        usernames.push(username);
-                        log(`Added username: ${username}`);
+                    if (username && username !== 'accounts') {
+                        usernameSet.add(username);
                     }
                 }
             });
             
+            const usernames = Array.from(usernameSet);
             log(`Total unique usernames found: ${usernames.length}`);
             return usernames;
         };
@@ -298,8 +280,8 @@ function instagramFollowChecker(flag) {
             log('Attempting to close dialog...');
             
             const closeSelectors = [
-                'div[role="dialog"] button[type="button"]',
                 'div[role="dialog"] svg[aria-label="Close"]',
+                'div[role="dialog"] button[type="button"]',
                 'div[role="presentation"] button',
                 'div[role="dialog"] button'
             ];
@@ -311,9 +293,16 @@ function instagramFollowChecker(flag) {
                 if (closeButton) {
                     log(`Found close button with selector: ${selector}`);
                     try {
-                        closeButton.click();
+                        if (selector.includes('svg')) {
+                            // For SVG, we need to click the parent element
+                            closeButton.parentElement.click();
+                        } else {
+                            closeButton.click();
+                        }
                         log('Successfully clicked close button');
-                        await delay(1500);
+                        
+                        // Slightly reduced delay (1200ms instead of 1500ms)
+                        await delay(1200);
                         return true;
                     } catch (err) {
                         log(`Error clicking close button: ${err.message}`, 'error');
@@ -333,7 +322,7 @@ function instagramFollowChecker(flag) {
             }));
             
             log('Sent Escape key event');
-            await delay(1500);
+            await delay(1200);
             return true;
         };
         
@@ -349,7 +338,7 @@ function instagramFollowChecker(flag) {
             }
             
             log('Waiting for followers dialog to open...');
-            await delay(3000);
+            await delay(2500);
             
             log('Scrolling through followers list...');
             await scrollDialog();
@@ -377,7 +366,7 @@ function instagramFollowChecker(flag) {
             }
             
             log('Waiting for following dialog to open...');
-            await delay(3000);
+            await delay(2500);
             
             log('Scrolling through following list...');
             await scrollDialog();
@@ -401,7 +390,7 @@ function instagramFollowChecker(flag) {
             const followers = await getFollowers();
             log(`Followers retrieval complete. Found ${followers.length} followers`);
             
-            await delay(2000);
+            await delay(1500);
             
             log('Getting following...');
             const following = await getFollowing();
@@ -413,12 +402,16 @@ function instagramFollowChecker(flag) {
                 return;
             }
             
+            // Use Sets for faster comparison
+            const followerSet = new Set(followers);
+            const followingSet = new Set(following);
+            
             // Find users who don't follow you back
-            const notFollowingBack = following.filter(user => !followers.includes(user));
+            const notFollowingBack = following.filter(user => !followerSet.has(user));
             log(`Found ${notFollowingBack.length} users who don't follow you back`);
             
             // Find users you don't follow back
-            const notFollowedBack = followers.filter(user => !following.includes(user));
+            const notFollowedBack = followers.filter(user => !followingSet.has(user));
             log(`Found ${notFollowedBack.length} users you don't follow back`);
             
             // Display results with styling
@@ -435,44 +428,10 @@ function instagramFollowChecker(flag) {
             console.table(notFollowedBack.map(user => ({ username: user })));
             console.log(`Total: ${notFollowedBack.length} users you don't follow back`);
             
-            // Create downloadable results
-            const createDownloadableResults = () => {
-                const today = new Date().toISOString().split('T')[0];
-                let content = `Instagram Follow Checker Results - ${today}\n\n`;
-                
-                content += `Total followers found: ${followers.length}\n`;
-                content += `Total following found: ${following.length}\n\n`;
-                
-                content += `=== Users who DON'T follow you back (${notFollowingBack.length}) ===\n`;
-                notFollowingBack.forEach(user => {
-                    content += `@${user}\n`;
-                });
-                
-                content += `\n=== Users you DON'T follow back (${notFollowedBack.length}) ===\n`;
-                notFollowedBack.forEach(user => {
-                    content += `@${user}\n`;
-                });
-                
-                const blob = new Blob([content], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `instagram-follow-checker-${today}.txt`;
-                a.click();
-                URL.revokeObjectURL(url);
-            };
-            
-            console.log('%cWant to download these results?', 'font-size: 14px; color: #833AB4;');
-            console.log('Run this command: downloadResults()');
-            
-            // Add download functions to window
-            window.downloadResults = createDownloadableResults;
-            
             // Final log
             log('Script execution completed successfully');
             if (enableLogging) {
                 console.log('Script execution completed successfully');
-                console.log('To download logs, run: downloadLogs()');
             }
             
         } catch (error) {
@@ -480,9 +439,6 @@ function instagramFollowChecker(flag) {
             log(`Stack trace: ${error.stack}`, 'error');
             console.error(`An error occurred: ${error.message}`);
             console.log('Please make sure you\'re on your profile page and try again.');
-            if (enableLogging) {
-                console.log('To download logs for troubleshooting, run: downloadLogs()');
-            }
         }
     })();
 }
